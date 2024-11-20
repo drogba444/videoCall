@@ -2,11 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import { io } from 'socket.io-client';
 
-// Connect to the socket.io server
-const socket = io('http://localhost:4000');
+// Connect to the live socket.io server hosted on Vercel
+const socket = io('https://videoback-beta.vercel.app/');
 
-// Your PeerJS server URL and path
-const peer = new Peer(undefined, { path: '/peerjs', host: 'localhost', port: 9000 });
+// Your PeerJS server URL and path, updated to the live backend
+const peer = new Peer(undefined, { 
+  path: '/peerjs', 
+  host: 'videoback-beta.vercel.app', 
+  port: 443, // Use 443 for HTTPS
+  secure: true // Ensure the connection is secure for production
+});
 
 const App = () => {
   const [peerId, setPeerId] = useState('');
@@ -43,7 +48,7 @@ const App = () => {
       setPeerId(id);
     });
 
-    // Handle socket signaling
+    // Handle socket signaling for offer, answer, and ice-candidate
     socket.on('offer', (offer) => {
       const call = peer.call(offer.peerId, userVideoRef.current.srcObject);
       call.on('stream', (partnerStream) => {
@@ -54,11 +59,11 @@ const App = () => {
     });
 
     socket.on('answer', (answer) => {
-      // Handle answer from the other peer
+      // Handle answer from the other peer (optional)
     });
 
     socket.on('ice-candidate', (candidate) => {
-      // Handle ICE candidates for NAT traversal
+      // Handle ICE candidates for NAT traversal (optional)
     });
 
   }, []);
@@ -73,7 +78,6 @@ const App = () => {
     });
     setIsCallActive(true);
   };
-
 
   return (
     <div>
@@ -93,8 +97,6 @@ const App = () => {
         <video ref={userVideoRef} autoPlay muted style={{ width: '300px' }} />
         <video ref={partnerVideoRef} autoPlay style={{ width: '300px' }} />
       </div>
-
-      
     </div>
   );
 };
