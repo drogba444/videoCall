@@ -74,7 +74,7 @@ const App = () => {
       }
     });
 
-  }, [userStream]);
+  }, []);
 
   // Make a video call to another peer
   const makeCall = () => {
