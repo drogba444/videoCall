@@ -9,7 +9,6 @@ const socket = io('https://videoback-1.onrender.com');
 const peer = new Peer(undefined, { 
   path: '/peerjs', 
   host: 'https://videoback-1.onrender.com', 
-  port: 443, // Use 443 for HTTPS
   secure: true // Ensure the connection is secure for production
 });
 
