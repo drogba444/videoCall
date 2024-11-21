@@ -2,47 +2,29 @@ import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import { io } from 'socket.io-client';
 
-// Connect to the socket.io server
+// Connect to the live socket.io server hosted on Vercel
 const socket = io('https://videoback-1.onrender.com');
+
+// Your PeerJS server URL and path, updated to the live backend
+const peer = new Peer(undefined, { 
+  path: '/peerjs', // This path must match the one in the backend
+  host: 'https://videoback-1.onrender.com', // Use your backend server's host
+  secure: true // Ensure the connection is secure for production
+});
 
 const App = () => {
   const [peerId, setPeerId] = useState('');
   const [otherPeerId, setOtherPeerId] = useState('');
   const [isCallActive, setIsCallActive] = useState(false);
-
+  
   const userVideoRef = useRef(null);
   const partnerVideoRef = useRef(null);
+  
   const [userStream, setUserStream] = useState(null);
 
-  const peer = useRef(null); // Use a ref for PeerJS to avoid re-initialization on rerenders.
-
-  // Initialize PeerJS and user's video stream
+  // Initialize user's video stream
   useEffect(() => {
-    // Create a PeerJS instance
-    peer.current = new Peer({
-      host: 'videoback-1.onrender.com',
-      port: 443,
-      path: '/peerjs',
-      secure: true, // Ensure a secure connection
-    });
-
-    // Generate the peer ID and set it
-    peer.current.on('open', (id) => {
-      setPeerId(id);
-      socket.emit('register-peer', id); // Notify the server of the new peer
-    });
-
-    // Handle incoming calls
-    peer.current.on('call', (call) => {
-      call.answer(userStream); // Answer the call with the user's stream
-      call.on('stream', (partnerStream) => {
-        if (partnerVideoRef.current) {
-          partnerVideoRef.current.srcObject = partnerStream;
-        }
-      });
-    });
-
-    // Set up user's video stream
+    // Get user's media (audio and video)
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
@@ -50,22 +32,69 @@ const App = () => {
         if (userVideoRef.current) {
           userVideoRef.current.srcObject = stream;
         }
-      })
-      .catch((err) => console.error('Failed to get user media:', err));
 
-    return () => {
-      if (peer.current) peer.current.destroy(); // Clean up the PeerJS instance
-    };
+        // Listen for incoming calls
+        peer.on('call', (call) => {
+          call.answer(stream);
+          call.on('stream', (partnerStream) => {
+            if (partnerVideoRef.current) {
+              partnerVideoRef.current.srcObject = partnerStream;
+            }
+          });
+        });
+      })
+      .catch((err) => console.error('Failed to get media:', err));
+
+    // Handle peer ID generation
+    peer.on('open', (id) => {
+      setPeerId(id);
+    });
+
+    // Handle socket signaling for offer, answer, and ice-candidate
+    socket.on('offer', (offer) => {
+      console.log('Offer received:', offer);
+      const call = peer.call(offer.peerId, userStream); // use the user's stream here
+      call.on('stream', (partnerStream) => {
+        if (partnerVideoRef.current) {
+          partnerVideoRef.current.srcObject = partnerStream;
+        }
+      });
+    });
+
+    socket.on('answer', (answer) => {
+      // Handle answer from the other peer (optional)
+      // This will typically be handled by the `call` event on PeerJS, but you can extend it here.
+    });
+
+    socket.on('ice-candidate', (candidate) => {
+      // Handle ICE candidates for NAT traversal (optional)
+      if (candidate) {
+        peer.signal(candidate);
+      }
+    });
+
   }, []);
 
-  // Make a call to another peer
+  // Make a video call to another peer
   const makeCall = () => {
-    const call = peer.current.call(otherPeerId, userStream); // Initiate the call with the user's stream
+    const call = peer.call(otherPeerId, userStream); // use the user's stream here
     call.on('stream', (partnerStream) => {
       if (partnerVideoRef.current) {
         partnerVideoRef.current.srcObject = partnerStream;
       }
     });
+
+    // Listen for ICE candidates and send them via Socket.io
+    peer.on('signal', (signalData) => {
+      if (signalData.type === 'offer') {
+        socket.emit('offer', { peerId: otherPeerId, offer: signalData });
+      } else if (signalData.type === 'answer') {
+        socket.emit('answer', { peerId: otherPeerId, answer: signalData });
+      } else if (signalData.type === 'candidate') {
+        socket.emit('ice-candidate', { peerId: otherPeerId, candidate: signalData });
+      }
+    });
+
     setIsCallActive(true);
   };
 
@@ -80,20 +109,12 @@ const App = () => {
           onChange={(e) => setOtherPeerId(e.target.value)}
           placeholder="Enter other peer ID"
         />
-        <button onClick={makeCall} disabled={!peerId || !otherPeerId || isCallActive}>
-          Make Call
-        </button>
+        <button onClick={makeCall} disabled={isCallActive}>Make Call</button>
       </div>
-
-      <div style={{ display: 'flex', gap: '20px' }}>
-        <div>
-          <h3>Your Video</h3>
-          <video ref={userVideoRef} autoPlay muted style={{ width: '300px' }} />
-        </div>
-        <div>
-          <h3>Partner's Video</h3>
-          <video ref={partnerVideoRef} autoPlay style={{ width: '300px' }} />
-        </div>
+      
+      <div>
+        <video ref={userVideoRef} autoPlay muted style={{ width: '300px' }} />
+        <video ref={partnerVideoRef} autoPlay style={{ width: '300px' }} />
       </div>
     </div>
   );
