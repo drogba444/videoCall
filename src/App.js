@@ -8,7 +8,7 @@ const socket = io('https://videoback-1.onrender.com');
 // Your PeerJS server URL and path, updated to the live backend
 const peer = new Peer(undefined, { 
   path: '/peerjs', // This path must match the one in the backend
-  host: 'https://videoback-1.onrender.com', // Use your backend server's host
+  host: 'videoback-1.onrender.com', // Use your backend server's host
   secure: true // Ensure the connection is secure for production
 });
 
